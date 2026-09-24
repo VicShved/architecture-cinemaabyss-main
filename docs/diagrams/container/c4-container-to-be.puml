@@ -29,7 +29,7 @@ System_Boundary(cinemaabyss, "Кинобездна (To-Be)") {
   Container(movies, "Movies Service", "Go, REST", "Метаданные фильмов, учет просмотров")
   Container(payments, "Payments Service", "Go, REST", "Финансовый сервис (платежи)")
   Container(subs, "Subscriptions Service", "Go, REST", "Управление подписками")
-  Container(events, "Events Service", "Go, Kafka", "Шина событий: приём доменных событий, публикация в Kafka и реактивная обработка (MVP)")
+  Container(events, "Events Service", "Python, FastAPI, Kafka", "Шина событий: приём доменных событий, публикация в Kafka и реактивная обработка (MVP)")
 
   ' Базы данных сервисов (database-per-service)
   ContainerDb(authdb, "Auth DB", "PostgreSQL", "Хранение данных аутентификации и авторизации")

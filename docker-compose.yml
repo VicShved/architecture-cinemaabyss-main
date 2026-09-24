@@ -88,6 +88,7 @@ services:
       context: ./src/microservices/events
       dockerfile: Dockerfile
     container_name: cinemaabyss-events-service
+    restart: unless-stopped
     depends_on:
       - kafka
     ports:
@@ -116,7 +117,7 @@ services:
       MOVIES_SERVICE_URL: http://movies-service:8081
       EVENTS_SERVICE_URL: http://events-service:8082
       GRADUAL_MIGRATION: "true"
-      MOVIES_MIGRATION_PERCENT: "50"
+      MOVIES_MIGRATION_PERCENT: "10"
     networks:
       - cinemaabyss-network
 

@@ -102,7 +102,7 @@ spec:
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: kafka-data
+  name: kafka-data-v2
   namespace: cinemaabyss
 spec:
   accessModes:
@@ -173,4 +173,4 @@ spec:
       volumes:
       - name: kafka-data
         persistentVolumeClaim:
-          claimName: kafka-data
+          claimName: kafka-data-v2

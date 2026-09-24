@@ -23,6 +23,9 @@ TOPIC_PAYMENT = "payment-events"
 
 GROUP_ID = "events-service"
 
+START_ATTEMPTS = 60
+START_RETRY_DELAY = 2.0
+
 
 class MovieEvent(BaseModel):
     movie_id: int
@@ -79,13 +82,37 @@ def _produce_event(event_type: str, payload: Dict[str, Any]) -> Event:
     )
 
 
+async def _start_with_retry(factory) -> Any:
+    last_exc: Optional[Exception] = None
+    for attempt in range(START_ATTEMPTS):
+        client = factory()
+        try:
+            await client.start()
+            return client
+        except Exception as exc:
+            last_exc = exc
+            try:
+                await client.stop()
+            except Exception:
+                pass
+            logger.warning(
+                "Kafka broker not ready (attempt %s/%s): %s",
+                attempt + 1,
+                START_ATTEMPTS,
+                exc,
+            )
+            await asyncio.sleep(START_RETRY_DELAY)
+    raise last_exc  # type: ignore[misc]
+
+
 async def _create_producer() -> None:
     global producer
-    producer = AIOKafkaProducer(
-        bootstrap_servers=KAFKA_BROKERS,
-        value_serializer=lambda v: json.dumps(v).encode("utf-8"),
+    producer = await _start_with_retry(
+        lambda: AIOKafkaProducer(
+            bootstrap_servers=KAFKA_BROKERS,
+            value_serializer=lambda v: json.dumps(v).encode("utf-8"),
+        )
     )
-    await producer.start()
     logger.info("Kafka producer started (brokers=%s)", KAFKA_BROKERS)
 
 
@@ -98,15 +125,16 @@ async def _stop_producer() -> None:
 
 
 async def _consume_topic(topic: str) -> None:
-    consumer = AIOKafkaConsumer(
-        topic,
-        bootstrap_servers=KAFKA_BROKERS,
-        group_id=f"{GROUP_ID}-{topic}",
-        auto_offset_reset="earliest",
-        enable_auto_commit=True,
-        value_deserializer=lambda b: json.loads(b.decode("utf-8")),
+    consumer = await _start_with_retry(
+        lambda: AIOKafkaConsumer(
+            topic,
+            bootstrap_servers=KAFKA_BROKERS,
+            group_id=f"{GROUP_ID}-{topic}",
+            auto_offset_reset="earliest",
+            enable_auto_commit=True,
+            value_deserializer=lambda b: json.loads(b.decode("utf-8")),
+        )
     )
-    await consumer.start()
     logger.info("Kafka consumer started for topic %s", topic)
     try:
         async for msg in consumer:
