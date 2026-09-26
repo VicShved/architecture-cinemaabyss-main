@@ -1,0 +1,84 @@
+@startuml
+' Кинобездна — To-Be, контейнерная диаграмма (C4 Container)
+' Все контейнеры планируются к развёртыванию в Kubernetes (Helm) — вне рамок диаграммы.
+!include ../templates/C4_Container.puml
+
+title Кинобездна — целевая архитектура (To-Be)\nКонтейнерная диаграмма (C4)
+
+' Люди
+Person(user, "Пользователь", "Смотрит контент")
+
+' Внешние системы
+System_Ext(reco, "Рекомендательная система", "Сторонний сервис")
+System_Ext(pay, "Платёжная система", "Платёжный шлюз")
+System_Ext(s3, "S3 Object Storage", "Облачное хранилище видео")
+
+' Клиенты
+Container_Ext(mobile, "Мобильное приложение", "iOS / Android", "Клиент на мобильных устройствах")
+Container_Ext(web, "Веб-клиент", "Браузер", "Клиент на компьютерах")
+Container_Ext(tv, "Приложение Smart TV", "Smart TV", "Клиент на телевизорах")
+
+System_Boundary(cinemaabyss, "Кинобездна (To-Be)") {
+
+  ' Единая точка входа
+  Container(gateway, "API Gateway", "FastAPI, REST", "Маршрутизация запросов к сервисам, проверка токена, фича-флаги и частичное переключение трафика (Strangler Fig)")
+
+  ' Микросервисы по доменам
+  Container(auth, "Auth Service", "Go, REST", "Аутентификация и авторизация, выпуск и проверка JWT-токенов, сессии")
+  Container(users, "Users Service", "Go, REST", "Профили пользователей")
+  Container(movies, "Movies Service", "Go, REST", "Метаданные фильмов, учет просмотров")
+  Container(payments, "Payments Service", "Go, REST", "Финансовый сервис (платежи)")
+  Container(subs, "Subscriptions Service", "Go, REST", "Управление подписками")
+  Container(events, "Events Service", "Python, FastAPI, Kafka", "Шина событий: приём доменных событий, публикация в Kafka и реактивная обработка (MVP)")
+
+  ' Базы данных сервисов (database-per-service)
+  ContainerDb(authdb, "Auth DB", "PostgreSQL", "Хранение данных аутентификации и авторизации")
+  ContainerDb(usersdb, "Users DB", "PostgreSQL", "Хранение профилей пользователей")
+  ContainerDb(catdb, "Catalog DB", "MongoDB", "Хранение метаданных фильмов и учета просмотров")
+  ContainerDb(paydb, "Payments DB", "PostgreSQL", "Хранение финансова информации")
+  ContainerDb(subsdb, "Subscriptions DB", "PostgreSQL", "Хранение подписок")
+
+  ' Шина сообщений
+  ContainerQueue(kafka, "Kafka", "Kafka", "Топики: user-events, movie-events, payment-events, subscription-events и др.")
+}
+
+' Клиенты обращаются через единый вход
+Rel(user, mobile, "использует")
+Rel(user, web, "использует")
+Rel(user, tv, "использует")
+
+Rel(mobile, gateway, "HTTPS / REST")
+Rel(web, gateway, "HTTPS / REST")
+Rel(tv, gateway, "HTTPS / REST")
+
+' API Gateway маршрутизирует к сервисам
+Rel(gateway, auth, "Получение токена", "REST")
+Rel(gateway, users, "Профили", "REST")
+Rel(gateway, movies, "Каталог и метаданные", "REST")
+Rel(gateway, payments, "Платежи", "REST")
+Rel(gateway, subs, "Подписки", "REST")
+
+' Сервисы владеют своими БД
+Rel(auth, authdb, "чтение/запись", "SQL")
+Rel(users, usersdb, "чтение/запись", "SQL")
+Rel(movies, catdb, "чтение/запись", "SQL")
+Rel(payments, paydb, "чтение/запись", "SQL")
+Rel(subs, subsdb, "чтение/запись", "SQL")
+
+' Доменные события через шину
+Rel(users, events, "Регистрация", "REST")
+Rel(movies, events, "Фильм опубликован", "REST")
+Rel(payments, events, "Оплата завершена", "REST")
+Rel(subs, events, "Подписка активирована", "REST")
+
+' Шина публикует и потребляет события Kafka
+BiRel(events, kafka, "публикация и чтение топиков", "Kafka API")
+Rel(kafka, reco, "Запрос рекомендаций", "Kafka")
+
+' Внешние интеграции
+BiRel(payments, pay, "HTTPS", "REST")
+BiRel(movies, s3, "запись/чтение видеофайлов", "S3 API")
+
+LAYOUT_WITH_LEGEND()
+
+@enduml
